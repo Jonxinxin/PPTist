@@ -40,7 +40,7 @@ defineProps<{
 </script>
 
 <style lang="scss" scoped>
-$menuWidth: 170px;
+$menuWidth: 180px;
 $menuHeight: 30px;
 $subMenuWidth: 120px;
 
@@ -50,7 +50,7 @@ $subMenuWidth: 120px;
   background: #fff;
   border: 1px solid $borderColor;
   box-shadow: $boxShadow;
-  border-radius: 2px;
+  border-radius: $borderRadius;
   list-style: none;
   margin: 0;
 }
@@ -115,7 +115,7 @@ $subMenuWidth: 120px;
     display: inline-block;
     width: 1px;
     height: 24px;
-    background-color: #f1f1f1;
+    background-color: rgba($color: #fff, $alpha: .3);
     position: absolute;
     right: 18px;
     top: 3px;

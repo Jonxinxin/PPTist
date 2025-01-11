@@ -9,7 +9,7 @@ import useLockElement from './useLockElement'
 import useDeleteElement from './useDeleteElement'
 import useCombineElement from './useCombineElement'
 import useCopyAndPasteElement from './useCopyAndPasteElement'
-import useSelectAllElement from './useSelectAllElement'
+import useSelectElement from './useSelectElement'
 import useMoveElement from './useMoveElement'
 import useOrderElement from './useOrderElement'
 import useHistorySnapshot from './useHistorySnapshot'
@@ -45,7 +45,7 @@ export default () => {
   const { deleteElement } = useDeleteElement()
   const { lockElement } = useLockElement()
   const { copyElement, cutElement, quickCopyElement } = useCopyAndPasteElement()
-  const { selectAllElement } = useSelectAllElement()
+  const { selectAllElements } = useSelectElement()
   const { moveElement } = useMoveElement()
   const { orderElement } = useOrderElement()
   const { redo, undo } = useHistorySnapshot()
@@ -68,7 +68,7 @@ export default () => {
   }
 
   const selectAll = () => {
-    if (editorAreaFocus.value) selectAllElement()
+    if (editorAreaFocus.value) selectAllElements()
     if (thumbnailsFocus.value) selectAllSlide()
   }
 
@@ -152,7 +152,7 @@ export default () => {
       enterScreeningFromStart()
       return
     }
-    if (key === KEYS.F) {
+    if (ctrlKey && key === KEYS.F) {
       e.preventDefault()
       mainStore.setSearchPanelState(!showSearchPanel.value)
       return
@@ -274,6 +274,30 @@ export default () => {
       if (disableHotkeys.value) return
       e.preventDefault()
       tabActiveElement()
+    }
+    if (editorAreaFocus.value && !shiftKey && !ctrlOrMetaKeyActive && !disableHotkeys.value) {
+      if (key === KEYS.T) {
+        mainStore.setCreatingElement({ type: 'text' })
+      }
+      else if (key === KEYS.R) {
+        mainStore.setCreatingElement({ type: 'shape', data: {
+          viewBox: [200, 200],
+          path: 'M 0 0 L 200 0 L 200 200 L 0 200 Z',
+        }})
+      }
+      else if (key === KEYS.O) {
+        mainStore.setCreatingElement({ type: 'shape', data: {
+          viewBox: [200, 200],
+          path: 'M 100 0 A 50 50 0 1 1 100 200 A 50 50 0 1 1 100 0 Z',
+        }})
+      }
+      else if (key === KEYS.L) {
+        mainStore.setCreatingElement({ type: 'line', data: {
+          path: 'M 0 0 L 20 20',
+          style: 'solid',
+          points: ['', ''],
+        }})
+      }
     }
   }
   

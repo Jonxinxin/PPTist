@@ -17,15 +17,16 @@
 
     <div class="row">
       <div style="width: 40%;">边框样式：</div>
-      <Select 
-        style="width: 60%;" 
-        :value="outline.style || ''"
-        @update:value="value => updateOutline({ style: value as 'solid' | 'dashed' })"
-        :options="[
-          { label: '实线边框', value: 'solid' },
-          { label: '虚线边框', value: 'dashed' },
-        ]"
-      />
+      <SelectCustom style="width: 60%;">
+        <template #options>
+          <div class="option" v-for="item in lineStyleOptions" :key="item" @click="updateOutline({ style: item })">
+            <SVGLine :type="item" />
+          </div>
+        </template>
+        <template #label>
+          <SVGLine :type="outline.style" />
+        </template>
+      </SelectCustom>
     </div>
     <div class="row">
       <div style="width: 40%;">边框颜色：</div>
@@ -54,11 +55,10 @@
       <Select
         style="width: 60%;;"
         :value="richTextAttrs.fontname"
+        search
+        searchLabel="搜索字体"
         @update:value="value => updateFontStyle('fontname', value as string)"
-        :options="[
-          ...availableFonts,
-          ...WEB_FONTS
-        ]"
+        :options="FONTS"
       >
         <template #icon>
           <IconFontSize />
@@ -67,6 +67,8 @@
       <Select
         style="width: 40%;"
         :value="richTextAttrs.fontsize"
+        search
+        searchLabel="搜索字号"
         @update:value="value => updateFontStyle('fontsize', value as string)"
         :options="fontSizeOptions.map(item => ({
           label: item, value: item
@@ -77,7 +79,7 @@
         </template>
       </Select>
     </SelectGroup>
-    <ButtonGroup class="row">
+    <ButtonGroup class="row" passive>
       <Popover trigger="click" style="width: 30%;">
         <template #content>
           <ColorPicker
@@ -85,7 +87,7 @@
             @update:modelValue="value => updateFontStyle('color', value)"
           />
         </template>
-        <TextColorButton :color="richTextAttrs.color" v-tooltip="'文字颜色'">
+        <TextColorButton first :color="richTextAttrs.color" v-tooltip="'文字颜色'">
           <IconText />
         </TextColorButton>
       </Popover>
@@ -106,7 +108,8 @@
         v-tooltip="'增大字号'"
         @click="updateFontStyle('fontsize-add', '2')"
       ><IconFontSize />+</Button>
-      <Button 
+      <Button
+        last
         class="font-size-btn"
         style="width: 20%;"
         v-tooltip="'减小字号'"
@@ -122,6 +125,7 @@
       <RadioButton value="left" style="flex: 1;" v-tooltip="'左对齐'"><IconAlignTextLeft /></RadioButton>
       <RadioButton value="center" style="flex: 1;" v-tooltip="'居中'"><IconAlignTextCenter /></RadioButton>
       <RadioButton value="right" style="flex: 1;" v-tooltip="'右对齐'"><IconAlignTextRight /></RadioButton>
+      <RadioButton value="justify" style="flex: 1;" v-tooltip="'两端对齐'"><IconAlignTextBoth /></RadioButton>
     </RadioGroup>
   </div>
 </template>
@@ -130,13 +134,14 @@
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTElement, PPTElementOutline, TableCell } from '@/types/slides'
+import type { LineStyleType, PPTElement, PPTElementOutline, TableCell } from '@/types/slides'
 import emitter, { EmitterEvents } from '@/utils/emitter'
-import { WEB_FONTS } from '@/configs/font'
+import { FONTS } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
-import ColorButton from '../common/ColorButton.vue'
-import TextColorButton from '../common/TextColorButton.vue'
+import SVGLine from '../common/SVGLine.vue'
+import ColorButton from '@/components/ColorButton.vue'
+import TextColorButton from '@/components/TextColorButton.vue'
 import ColorPicker from '@/components/ColorPicker/index.vue'
 import Divider from '@/components/Divider.vue'
 import Button from '@/components/Button.vue'
@@ -146,10 +151,11 @@ import RadioGroup from '@/components/RadioGroup.vue'
 import NumberInput from '@/components/NumberInput.vue'
 import Select from '@/components/Select.vue'
 import SelectGroup from '@/components/SelectGroup.vue'
+import SelectCustom from '@/components/SelectCustom.vue'
 import Popover from '@/components/Popover.vue'
 
 const slidesStore = useSlidesStore()
-const { richTextAttrs, availableFonts, activeElementList } = storeToRefs(useMainStore())
+const { richTextAttrs, activeElementList } = storeToRefs(useMainStore())
 
 const { addHistorySnapshot } = useHistorySnapshot()
 
@@ -158,6 +164,7 @@ const updateElement = (id: string, props: Partial<PPTElement>) => {
   addHistorySnapshot()
 }
 
+const lineStyleOptions = ref<LineStyleType[]>(['solid', 'dashed', 'dotted'])
 const fontSizeOptions = [
   '12px', '14px', '16px', '18px', '20px', '22px', '24px', '28px', '32px',
   '36px', '40px', '44px', '48px', '54px', '60px', '66px', '72px', '76px',
@@ -249,5 +256,20 @@ const updateFontStyle = (command: string, value: string) => {
 }
 .font-size-btn {
   padding: 0;
+}
+.option {
+  height: 32px;
+  padding: 0 5px;
+  border-radius: $borderRadius;
+
+  &:not(.selected):hover {
+    background-color: rgba($color: $themeColor, $alpha: .05);
+    cursor: pointer;
+  }
+
+  &.selected {
+    color: $themeColor;
+    font-weight: 700;
+  }
 }
 </style>

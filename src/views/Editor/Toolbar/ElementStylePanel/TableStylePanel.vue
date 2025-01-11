@@ -4,11 +4,10 @@
       <Select
         style="width: 50%;"
         :value="textAttrs.fontname"
+        search
+        searchLabel="搜索字体"
         @update:value="value => updateTextAttrs({ fontname: value as string })"
-        :options="[
-          ...availableFonts,
-          ...WEB_FONTS
-        ]"
+        :options="FONTS"
       >
         <template #icon>
           <IconFontSize />
@@ -17,6 +16,8 @@
       <Select
         style="width: 50%;"
         :value="textAttrs.fontsize"
+        search
+        searchLabel="搜索字号"
         @update:value="value => updateTextAttrs({ fontsize: value as string })"
         :options="fontSizeOptions.map(item => ({
           label: item, value: item
@@ -28,7 +29,7 @@
       </Select>
     </SelectGroup>
 
-    <ButtonGroup class="row">
+    <ButtonGroup class="row" passive>
       <Popover trigger="click" style="width: 50%;">
         <template #content>
           <ColorPicker
@@ -36,7 +37,7 @@
             @update:modelValue="value => updateTextAttrs({ color: value })"
           />
         </template>
-        <TextColorButton v-tooltip="'文字颜色'" :color="textAttrs.color">
+        <TextColorButton first v-tooltip="'文字颜色'" :color="textAttrs.color">
           <IconText />
         </TextColorButton>
       </Popover>
@@ -47,7 +48,7 @@
             @update:modelValue="value => updateTextAttrs({ backcolor: value })"
           />
         </template>
-        <TextColorButton v-tooltip="'单元格填充'" :color="textAttrs.backcolor">
+        <TextColorButton last v-tooltip="'单元格填充'" :color="textAttrs.backcolor">
           <IconFill />
         </TextColorButton>
       </Popover>
@@ -84,11 +85,12 @@
       class="row" 
       button-style="solid" 
       :value="textAttrs.align"
-      @update:value="value => updateTextAttrs({ align: value as 'left' | 'center' | 'right' })"
+      @update:value="value => updateTextAttrs({ align: value as TextAlign })"
     >
       <RadioButton value="left" v-tooltip="'左对齐'" style="flex: 1;"><IconAlignTextLeft /></RadioButton>
       <RadioButton value="center" v-tooltip="'居中'" style="flex: 1;"><IconAlignTextCenter /></RadioButton>
       <RadioButton value="right" v-tooltip="'右对齐'" style="flex: 1;"><IconAlignTextRight /></RadioButton>
+      <RadioButton value="justify" v-tooltip="'两端对齐'" style="flex: 1;"><IconAlignTextBoth /></RadioButton>
     </RadioGroup>
 
     <Divider />
@@ -172,13 +174,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTTableElement, TableCell, TableCellStyle, TableTheme } from '@/types/slides'
-import { WEB_FONTS } from '@/configs/font'
+import type { PPTTableElement, TableCell, TableCellStyle, TableTheme, TextAlign } from '@/types/slides'
+import { FONTS } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 import ElementOutline from '../common/ElementOutline.vue'
-import ColorButton from '../common/ColorButton.vue'
-import TextColorButton from '../common/TextColorButton.vue'
+import ColorButton from '@/components/ColorButton.vue'
+import TextColorButton from '@/components/TextColorButton.vue'
 import CheckboxButton from '@/components/CheckboxButton.vue'
 import ColorPicker from '@/components/ColorPicker/index.vue'
 import Divider from '@/components/Divider.vue'
@@ -193,7 +195,7 @@ import SelectGroup from '@/components/SelectGroup.vue'
 import Popover from '@/components/Popover.vue'
 
 const slidesStore = useSlidesStore()
-const { handleElement, handleElementId, selectedTableCells: selectedCells, availableFonts } = storeToRefs(useMainStore())
+const { handleElement, handleElementId, selectedTableCells: selectedCells } = storeToRefs(useMainStore())
 const themeColor = computed(() => slidesStore.theme.themeColor)
 
 const fontSizeOptions = [
@@ -208,7 +210,7 @@ const textAttrs = ref({
   color: '#000',
   backcolor: '',
   fontsize: '12px',
-  fontname: '微软雅黑',
+  fontname: '',
   align: 'left',
 })
 
@@ -256,7 +258,7 @@ const updateTextAttrState = () => {
       color: '#000',
       backcolor: '',
       fontsize: '12px',
-      fontname: '微软雅黑',
+      fontname: '',
       align: 'left',
     }
   }
@@ -269,7 +271,7 @@ const updateTextAttrState = () => {
       color: style.color || '#000',
       backcolor: style.backcolor || '',
       fontsize: style.fontsize || '12px',
-      fontname: style.fontname || '微软雅黑',
+      fontname: style.fontname || '',
       align: style.align || 'left',
     }
   }

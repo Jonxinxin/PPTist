@@ -1,20 +1,39 @@
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { parse, type Shape, type Element } from 'pptxtojson'
+import { parse, type Shape, type Element, type ChartItem } from 'pptxtojson'
 import { nanoid } from 'nanoid'
-import type { Slide, TableCellStyle, TableCell, ChartType, ChartOptions, SlideBackground, PPTShapeElement, PPTLineElement } from '@/types/slides'
 import { useSlidesStore } from '@/store'
 import { decrypt } from '@/utils/crypto'
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
-import { VIEWPORT_SIZE } from '@/configs/canvas'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
+import useSlideHandler from '@/hooks/useSlideHandler'
 import message from '@/utils/message'
+import { getSvgPathRange } from '@/utils/svgPathParser'
+import type {
+  Slide,
+  TableCellStyle,
+  TableCell,
+  ChartType,
+  SlideBackground,
+  PPTShapeElement,
+  PPTLineElement,
+  ShapeTextAlign,
+  PPTTextElement,
+  ChartOptions,
+} from '@/types/slides'
+
+const convertFontSizePtToPx = (html: string, ratio: number) => {
+  return html.replace(/font-size:\s*([\d.]+)pt/g, (match, p1) => {
+    return `font-size: ${(parseFloat(p1) * ratio).toFixed(1)}px`
+  })
+}
 
 export default () => {
   const slidesStore = useSlidesStore()
   const { theme } = storeToRefs(useSlidesStore())
 
-  const { addSlidesFromData, isEmptySlide } = useAddSlidesOrElements()
+  const { addSlidesFromData } = useAddSlidesOrElements()
+  const { isEmptySlide } = useSlideHandler()
 
   const exporting = ref(false)
 
@@ -26,7 +45,10 @@ export default () => {
     reader.addEventListener('load', () => {
       try {
         const slides = JSON.parse(decrypt(reader.result as string))
-        if (cover) slidesStore.setSlides(slides)
+        if (cover) {
+          slidesStore.updateSlideIndex(0)
+          slidesStore.setSlides(slides)
+        }
         else if (isEmptySlide.value) slidesStore.setSlides(slides)
         else addSlidesFromData(slides)
       }
@@ -37,7 +59,7 @@ export default () => {
     reader.readAsText(file)
   }
 
-  const parseLineElement = (el: Shape): PPTLineElement => {
+  const parseLineElement = (el: Shape) => {
     let start: [number, number] = [0, 0]
     let end: [number, number] = [0, 0]
 
@@ -57,7 +79,8 @@ export default () => {
       start = [el.width, 0]
       end = [0, el.height]
     }
-    return {
+
+    const data: PPTLineElement = {
       type: 'line',
       id: nanoid(10),
       width: el.borderWidth || 1,
@@ -67,8 +90,42 @@ export default () => {
       end,
       style: el.borderType,
       color: el.borderColor,
-      points: ['', el.shapType === 'straightConnector1' ? 'arrow' : '']
+      points: ['', /straightConnector/.test(el.shapType) ? 'arrow' : '']
     }
+    if (/bentConnector/.test(el.shapType)) {
+      data.broken2 = [
+        Math.abs(start[0] - end[0]) / 2,
+        Math.abs(start[1] - end[1]) / 2,
+      ]
+    }
+
+    return data
+  }
+
+  const calculateRotatedPosition = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    ox: number,
+    oy: number,
+    k: number,
+  ) => {
+    const radians = k * (Math.PI / 180)
+
+    const containerCenterX = x + w / 2
+    const containerCenterY = y + h / 2
+
+    const relativeX = ox - w / 2
+    const relativeY = oy - h / 2
+
+    const rotatedX = relativeX * Math.cos(radians) + relativeY * Math.sin(radians)
+    const rotatedY = -relativeX * Math.sin(radians) + relativeY * Math.cos(radians)
+
+    const graphicX = containerCenterX + rotatedX
+    const graphicY = containerCenterY + rotatedY
+
+    return { x: graphicX, y: graphicY }
   }
 
   // 导入PPTX文件
@@ -87,8 +144,10 @@ export default () => {
     reader.onload = async e => {
       const json = await parse(e.target!.result as ArrayBuffer)
 
+      const ratio = 96 / 72
       const width = json.size.width
-      const scale = VIEWPORT_SIZE / width
+
+      slidesStore.setViewportSize(width * ratio)
 
       const slides: Slide[] = []
       for (const item of json.slides) {
@@ -97,16 +156,23 @@ export default () => {
         if (type === 'image') {
           background = {
             type: 'image',
-            image: value.picBase64,
-            imageSize: 'cover',
+            image: {
+              src: value.picBase64,
+              size: 'cover',
+            },
           }
         }
         else if (type === 'gradient') {
           background = {
             type: 'gradient',
-            gradientType: 'linear',
-            gradientColor: [value.colors[0], value.colors[1]],
-            gradientRotate: value.rot,
+            gradient: {
+              type: 'linear',
+              colors: value.colors.map(item => ({
+                ...item,
+                pos: parseInt(item.pos),
+              })),
+              rotate: value.rot,
+            },
           }
         }
         else {
@@ -120,17 +186,25 @@ export default () => {
           id: nanoid(10),
           elements: [],
           background,
+          remark: item.note || '',
         }
 
         const parseElements = (elements: Element[]) => {
-          for (const el of elements) {
-            el.width = el.width * scale
-            el.height = el.height * scale
-            el.left = el.left * scale
-            el.top = el.top * scale
+          const sortedElements = elements.sort((a, b) => a.order - b.order)
+
+          for (const el of sortedElements) {
+            const originWidth = el.width || 1
+            const originHeight = el.height || 1
+            const originLeft = el.left
+            const originTop = el.top
+
+            el.width = el.width * ratio
+            el.height = el.height * ratio
+            el.left = el.left * ratio
+            el.top = el.top * ratio
   
             if (el.type === 'text') {
-              slide.elements.push({
+              const textEl: PPTTextElement = {
                 type: 'text',
                 id: nanoid(10),
                 width: el.width,
@@ -140,7 +214,7 @@ export default () => {
                 rotate: el.rotate,
                 defaultFontName: theme.value.fontName,
                 defaultColor: theme.value.fontColor,
-                content: el.content,
+                content: convertFontSizePtToPx(el.content, ratio),
                 lineHeight: 1,
                 outline: {
                   color: el.borderColor,
@@ -148,7 +222,17 @@ export default () => {
                   style: el.borderType,
                 },
                 fill: el.fillColor,
-              })
+                vertical: el.isVertical,
+              }
+              if (el.shadow) {
+                textEl.shadow = {
+                  h: el.shadow.h * ratio,
+                  v: el.shadow.v * ratio,
+                  blur: el.shadow.blur * ratio,
+                  color: el.shadow.color,
+                }
+              }
+              slide.elements.push(textEl)
             }
             else if (el.type === 'image') {
               slide.elements.push({
@@ -161,15 +245,52 @@ export default () => {
                 top: el.top,
                 fixedRatio: true,
                 rotate: el.rotate,
+                flipH: el.isFlipH,
+                flipV: el.isFlipV,
+              })
+            }
+            else if (el.type === 'audio') {
+              slide.elements.push({
+                type: 'audio',
+                id: nanoid(10),
+                src: el.blob,
+                width: el.width,
+                height: el.height,
+                left: el.left,
+                top: el.top,
+                rotate: 0,
+                fixedRatio: false,
+                color: theme.value.themeColor,
+                loop: false,
+                autoplay: false,
+              })
+            }
+            else if (el.type === 'video') {
+              slide.elements.push({
+                type: 'video',
+                id: nanoid(10),
+                src: (el.blob || el.src)!,
+                width: el.width,
+                height: el.height,
+                left: el.left,
+                top: el.top,
+                rotate: 0,
+                autoplay: false,
               })
             }
             else if (el.type === 'shape') {
-              if (el.shapType === 'line' || el.shapType === 'straightConnector1') {
+              if (el.shapType === 'line' || /Connector/.test(el.shapType)) {
                 const lineElement = parseLineElement(el)
                 slide.elements.push(lineElement)
               }
               else {
                 const shape = shapeList.find(item => item.pptxShapeType === el.shapType)
+
+                const vAlignMap: { [key: string]: ShapeTextAlign } = {
+                  'mid': 'middle',
+                  'down': 'bottom',
+                  'up': 'top',
+                }
                 
                 const element: PPTShapeElement = {
                   type: 'shape',
@@ -189,10 +310,20 @@ export default () => {
                     style: el.borderType,
                   },
                   text: {
-                    content: el.content,
+                    content: convertFontSizePtToPx(el.content, ratio),
                     defaultFontName: theme.value.fontName,
                     defaultColor: theme.value.fontColor,
-                    align: 'middle',
+                    align: vAlignMap[el.vAlign] || 'middle',
+                  },
+                  flipH: el.isFlipH,
+                  flipV: el.isFlipV,
+                }
+                if (el.shadow) {
+                  element.shadow = {
+                    h: el.shadow.h * ratio,
+                    v: el.shadow.v * ratio,
+                    blur: el.shadow.blur * ratio,
+                    color: el.shadow.color,
                   }
                 }
     
@@ -205,15 +336,25 @@ export default () => {
                     element.viewBox = [el.width, el.height]
     
                     const pathFormula = SHAPE_PATH_FORMULAS[shape.pathFormula]
-                    if ('editable' in pathFormula) {
+                    if ('editable' in pathFormula && pathFormula.editable) {
                       element.path = pathFormula.formula(el.width, el.height, pathFormula.defaultValue)
-                      element.keypoint = pathFormula.defaultValue
+                      element.keypoints = pathFormula.defaultValue
                     }
                     else element.path = pathFormula.formula(el.width, el.height)
                   }
                 }
+                if (el.shapType === 'custom') {
+                  if (el.path!.indexOf('NaN') !== -1) element.path = ''
+                  else {
+                    element.special = true
+                    element.path = el.path!
+  
+                    const { maxX, maxY } = getSvgPathRange(element.path)
+                    element.viewBox = [maxX || originWidth, maxY || originHeight]
+                  }
+                }
     
-                slide.elements.push(element)
+                if (element.path) slide.elements.push(element)
               }
             }
             else if (el.type === 'table') {
@@ -229,13 +370,33 @@ export default () => {
                 const rowCells: TableCell[] = []
                 for (let j = 0; j < col; j++) {
                   const cellData = el.data[i][j]
+
+                  let textDiv: HTMLDivElement | null = document.createElement('div')
+                  textDiv.innerHTML = cellData.text
+                  const p = textDiv.querySelector('p')
+                  const align = p?.style.textAlign || 'left'
+
+                  const span = textDiv.querySelector('span')
+                  const fontsize = span?.style.fontSize ? (parseInt(span?.style.fontSize) * ratio).toFixed(1) + 'px' : ''
+                  const fontname = span?.style.fontFamily || ''
+                  const color = span?.style.color || cellData.fontColor
+
                   rowCells.push({
                     id: nanoid(10),
-                    colspan: 1,
+                    colspan: cellData.colSpan || 1,
                     rowspan: cellData.rowSpan || 1,
-                    text: cellData.text,
-                    style,
+                    text: textDiv.innerText,
+                    style: {
+                      ...style,
+                      align: ['left', 'right', 'center'].includes(align) ? (align as 'left' | 'right' | 'center') : 'left',
+                      fontsize,
+                      fontname,
+                      color,
+                      bold: cellData.fontBold,
+                      backcolor: cellData.fillColor,
+                    },
                   })
+                  textDiv = null
                 }
                 data.push(rowCells)
               }
@@ -253,16 +414,9 @@ export default () => {
                 rotate: 0,
                 data,
                 outline: {
-                  width: 2,
-                  style: 'solid',
-                  color: '#eeece1',
-                },
-                theme: {
-                  color: theme.value.themeColor,
-                  rowHeader: true,
-                  rowFooter: false,
-                  colHeader: false,
-                  colFooter: false,
+                  width: el.borderWidth || 2,
+                  style: el.borderType,
+                  color: el.borderColor || '#eeece1',
                 },
                 cellMinHeight: 36,
               })
@@ -272,40 +426,54 @@ export default () => {
               let legends: string[]
               let series: number[][]
   
-              if (el.chartType === 'scatterChart') {
-                labels = el.data[0].map(item => item + '')
-                legends = ['系列1']
-                series = [el.data[1]]
+              if (el.chartType === 'scatterChart' || el.chartType === 'bubbleChart') {
+                labels = el.data[0].map((item, index) => `坐标${index + 1}`)
+                legends = ['X', 'Y']
+                series = el.data
               }
               else {
-                labels = Object.values(el.data[0].xlabels)
-                legends = el.data.map(item => item.key)
-                series = el.data.map(item => item.values.map(v => v.y))
+                const data = el.data as ChartItem[]
+                labels = Object.values(data[0].xlabels)
+                legends = data.map(item => item.key)
+                series = data.map(item => item.values.map(v => v.y))
               }
-  
-              let options: ChartOptions = {}
+
+              const options: ChartOptions = {}
   
               let chartType: ChartType = 'bar'
-              if (el.chartType === 'barChart') {
-                chartType = 'bar'
-              }
-              if (el.chartType === 'stackedBarChart') {
-                chartType = 'bar'
-                options = { stackBars: true }
-              }
-              else if (el.chartType === 'lineChart') {
-                chartType = 'line'
-              }
-              else if (el.chartType === 'areaChart') {
-                chartType = 'line'
-                options = { showArea: true }
-              }
-              else if (el.chartType === 'scatterChart') {
-                chartType = 'line'
-                options = { showLine: false }
-              }
-              else if (el.chartType === 'pieChart' || el.chartType === 'pie3DChart') {
-                chartType = 'pie'
+
+              switch (el.chartType) {
+                case 'barChart':
+                case 'bar3DChart':
+                  chartType = 'bar'
+                  if (el.barDir === 'bar') chartType = 'column'
+                  if (el.grouping === 'stacked' || el.grouping === 'percentStacked') options.stack = true
+                  break
+                case 'lineChart':
+                case 'line3DChart':
+                  if (el.grouping === 'stacked' || el.grouping === 'percentStacked') options.stack = true
+                  chartType = 'line'
+                  break
+                case 'areaChart':
+                case 'area3DChart':
+                  if (el.grouping === 'stacked' || el.grouping === 'percentStacked') options.stack = true
+                  chartType = 'area'
+                  break
+                case 'scatterChart':
+                case 'bubbleChart':
+                  chartType = 'scatter'
+                  break
+                case 'pieChart':
+                case 'pie3DChart':
+                  chartType = 'pie'
+                  break
+                case 'radarChart':
+                  chartType = 'radar'
+                  break
+                case 'doughnutChart':
+                  chartType = 'ring'
+                  break
+                default:
               }
   
               slide.elements.push({
@@ -317,8 +485,8 @@ export default () => {
                 left: el.left,
                 top: el.top,
                 rotate: 0,
-                themeColor: [theme.value.themeColor],
-                gridColor: theme.value.fontColor,
+                themeColors: [theme.value.themeColor],
+                textColor: theme.value.fontColor,
                 data: {
                   labels,
                   legends,
@@ -328,10 +496,29 @@ export default () => {
               })
             }
             else if (el.type === 'group') {
+              const elements = el.elements.map(_el => {
+                let left = _el.left + originLeft
+                let top = _el.top + originTop
+
+                if (el.rotate) {
+                  const { x, y } = calculateRotatedPosition(originLeft, originTop, originWidth, originHeight, _el.left, _el.top, el.rotate)
+                  left = x
+                  top = y
+                }
+
+                return {
+                  ..._el,
+                  left,
+                  top,
+                }
+              })
+              parseElements(elements)
+            }
+            else if (el.type === 'diagram') {
               const elements = el.elements.map(_el => ({
                 ..._el,
-                left: _el.left + el.left,
-                top: _el.top + el.top,
+                left: _el.left + originLeft,
+                top: _el.top + originTop,
               }))
               parseElements(elements)
             }
@@ -340,8 +527,8 @@ export default () => {
         parseElements(item.elements)
         slides.push(slide)
       }
-      if (isEmptySlide.value) slidesStore.setSlides(slides)
-      else addSlidesFromData(slides)
+      slidesStore.updateSlideIndex(0)
+      slidesStore.setSlides(slides)
       exporting.value = false
     }
     reader.readAsArrayBuffer(file)
