@@ -47,7 +47,7 @@
           :style="{
             '--paragraphSpace': `${elementInfo.paragraphSpace === undefined ? 5 : elementInfo.paragraphSpace}px`,
           }"
-          @update="value => updateContent(value)"
+          @update="({ value, ignore }) => updateContent(value, ignore)"
           @mousedown="$event => handleSelectElement($event, false)"
         />
 
@@ -157,17 +157,17 @@ onUnmounted(() => {
   if (elementRef.value) resizeObserver.unobserve(elementRef.value)
 })
 
-const updateContent = (content: string) => {
+const updateContent = (content: string, ignore = false) => {
   slidesStore.updateElement({
     id: props.elementInfo.id,
     props: { content },
   })
   
-  addHistorySnapshot()
+  if (!ignore) addHistorySnapshot()
 }
 
 const checkEmptyText = debounce(function() {
-  const pureText = props.elementInfo.content.replaceAll(/<[^>]+>/g, '')
+  const pureText = props.elementInfo.content.replace(/<[^>]+>/g, '')
   if (!pureText) slidesStore.deleteElement(props.elementInfo.id)
 }, 300, { trailing: true })
 

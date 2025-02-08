@@ -9,6 +9,8 @@
           'before': index < slideIndex,
           'after': index > slideIndex,
           'hide': (index === slideIndex - 1 || index === slideIndex + 1) && slide.turningMode !== slidesWithTurningMode[slideIndex].turningMode,
+          'last': index === slideIndex - 1,
+          'next': index === slideIndex + 1,
         }
       ]"
       v-for="(slide, index) in slidesWithTurningMode" 
@@ -39,8 +41,7 @@ import { computed, provide } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import { injectKeySlideScale } from '@/types/injectKey'
-import { VIEWPORT_SIZE } from '@/configs/canvas'
-import { SLIDE_ANIMATIONS } from '@/configs/animation'
+import useSlidesWithTurningMode from './hooks/useSlidesWithTurningMode'
 
 import ScreenSlide from './ScreenSlide.vue'
 
@@ -52,24 +53,11 @@ const props = defineProps<{
   manualExitFullscreen: () => void
 }>()
 
-const { slides, slideIndex } = storeToRefs(useSlidesStore())
+const { slideIndex, viewportSize } = storeToRefs(useSlidesStore())
 
-const slidesWithTurningMode = computed(() => {
-  return slides.value.map(slide => {
-    let turningMode = slide.turningMode
-    if (!turningMode) turningMode = 'slideY'
-    if (turningMode === 'random') {
-      const turningModeKeys = SLIDE_ANIMATIONS.filter(item => !['random', 'no'].includes(item.value)).map(item => item.value)
-      turningMode = turningModeKeys[Math.floor(Math.random() * turningModeKeys.length)]
-    }
-    return {
-      ...slide,
-      turningMode,
-    }
-  })
-})
+const { slidesWithTurningMode } = useSlidesWithTurningMode()
 
-const scale = computed(() => props.slideWidth / VIEWPORT_SIZE)
+const scale = computed(() => props.slideWidth / viewportSize.value)
 provide(injectKeySlideScale, scale)
 </script>
 
@@ -86,6 +74,10 @@ provide(injectKeySlideScale, scale)
   left: 0;
   width: 100%;
   height: 100%;
+
+  &:not(.last, .next) {
+    z-index: -1;
+  }
 
   &.current {
     z-index: 2;

@@ -36,6 +36,7 @@ import {
   AlignHorizontally,
   BringToFront,
   SendToBack,
+  Send,
   AlignTextLeft,
   AlignTextRight,
   AlignTextCenter,
@@ -64,6 +65,7 @@ import {
   ChartScatter,
   ChartLine,
   ChartPie,
+  RadarChart,
   Text,
   Rotate,
   LeftTwo,
@@ -120,6 +122,10 @@ import {
   CheckOne,
   CloseOne,
   Info,
+  Comment,
+  User,
+  Switch,
+  More,
 } from '@icon-park/vue-next'
 
 export interface Icons {
@@ -161,6 +167,7 @@ export const icons: Icons = {
   IconAlignHorizontally: AlignHorizontally,
   IconBringToFront: BringToFront,
   IconSendToBack: SendToBack,
+  IconSend: Send,
   IconAlignTextLeft: AlignTextLeft,
   IconAlignTextRight: AlignTextRight,
   IconAlignTextCenter: AlignTextCenter,
@@ -189,6 +196,7 @@ export const icons: Icons = {
   IconChartScatter: ChartScatter,
   IconChartLine: ChartLine,
   IconChartPie: ChartPie,
+  IconRadarChart: RadarChart,
   IconText: Text,
   IconRotate: Rotate,
   IconLeftTwo: LeftTwo,
@@ -245,6 +253,10 @@ export const icons: Icons = {
   IconCheckOne: CheckOne,
   IconCloseOne: CloseOne,
   IconInfo: Info,
+  IconComment: Comment,
+  IconUser: User,
+  IconSwitch: Switch,
+  IconMore: More,
 }
 
 export default {

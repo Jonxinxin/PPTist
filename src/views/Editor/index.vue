@@ -18,6 +18,8 @@
 
   <SelectPanel v-if="showSelectPanel" />
   <SearchPanel v-if="showSearchPanel" />
+  <NotesPanel v-if="showNotesPanel" />
+  <MarkupPanel v-if="showMarkupPanel" />
 
   <Modal
     :visible="!!dialogForExport" 
@@ -25,6 +27,17 @@
     @closed="closeExportDialog()"
   >
     <ExportDialog />
+  </Modal>
+
+  <Modal
+    :visible="showAIPPTDialog" 
+    :width="680"
+    :closeOnClickMask="false"
+    :closeOnEsc="false"
+    closeButton
+    @closed="closeAIPPTDialog()"
+  >
+    <AIPPTDialog />
   </Modal>
 </template>
 
@@ -44,11 +57,15 @@ import Remark from './Remark/index.vue'
 import ExportDialog from './ExportDialog/index.vue'
 import SelectPanel from './SelectPanel.vue'
 import SearchPanel from './SearchPanel.vue'
+import NotesPanel from './NotesPanel.vue'
+import MarkupPanel from './MarkupPanel.vue'
+import AIPPTDialog from './AIPPTDialog.vue'
 import Modal from '@/components/Modal.vue'
 
 const mainStore = useMainStore()
-const { dialogForExport, showSelectPanel, showSearchPanel } = storeToRefs(mainStore)
+const { dialogForExport, showSelectPanel, showSearchPanel, showNotesPanel, showMarkupPanel, showAIPPTDialog } = storeToRefs(mainStore)
 const closeExportDialog = () => mainStore.setDialogForExport('')
+const closeAIPPTDialog = () => mainStore.setAIPPTDialogState(false)
 
 const remarkHeight = ref(40)
 

@@ -26,8 +26,8 @@
 
       <Select 
         style="flex: 1;" 
-        :value="background.imageSize || 'cover'" 
-        @update:value="value => updateBackground({ imageSize: value as 'repeat' | 'cover' | 'contain' })"
+        :value="background.image?.size || 'cover'" 
+        @update:value="value => updateImageBackground({ size: value as SlideBackgroundImageSize })"
         v-else-if="background.type === 'image'"
         :options="[
           { label: '缩放', value: 'contain' },
@@ -38,8 +38,8 @@
 
       <Select 
         style="flex: 1;" 
-        :value="background.gradientType || ''" 
-        @update:value="value => updateBackground({ gradientType: value as 'linear' | 'radial' })"
+        :value="background.gradient?.type || ''" 
+        @update:value="value => updateGradientBackground({ type: value as GradientType })"
         v-else
         :options="[
           { label: '线性渐变', value: 'linear' },
@@ -51,7 +51,7 @@
     <div class="background-image-wrapper" v-if="background.type === 'image'">
       <FileInput @change="files => uploadBackgroundImage(files)">
         <div class="background-image">
-          <div class="content" :style="{ backgroundImage: `url(${background.image})` }">
+          <div class="content" :style="{ backgroundImage: `url(${background.image?.src})` }">
             <IconPlus />
           </div>
         </div>
@@ -60,37 +60,33 @@
 
     <div class="background-gradient-wrapper" v-if="background.type === 'gradient'">
       <div class="row">
-        <div style="width: 40%;">起点颜色：</div>
-        <Popover trigger="click" style="width: 60%;">
-          <template #content>
-            <ColorPicker
-              :modelValue="background.gradientColor![0]"
-              @update:modelValue="value => updateBackground({ gradientColor: [value, background.gradientColor![1]] })"
-            />
-          </template>
-          <ColorButton :color="background.gradientColor![0]" />
-        </Popover>
+        <GradientBar
+          :value="background.gradient?.colors || []"
+          :index="currentGradientIndex"
+          @update:value="value => updateGradientBackground({ colors: value })"
+          @update:index="index => currentGradientIndex = index"
+        />
       </div>
       <div class="row">
-        <div style="width: 40%;">终点颜色：</div>
+        <div style="width: 40%;">当前色块：</div>
         <Popover trigger="click" style="width: 60%;">
           <template #content>
             <ColorPicker
-              :modelValue="background.gradientColor![1]"
-              @update:modelValue="value => updateBackground({ gradientColor: [background.gradientColor![0], value] })"
+              :modelValue="background.gradient!.colors[currentGradientIndex].color"
+              @update:modelValue="value => updateGradientBackgroundColors(value)"
             />
           </template>
-          <ColorButton :color="background.gradientColor![1]" />
+          <ColorButton :color="background.gradient!.colors[currentGradientIndex].color" />
         </Popover>
       </div>
-      <div class="row" v-if="background.gradientType === 'linear'">
+      <div class="row" v-if="background.gradient?.type === 'linear'">
         <div style="width: 40%;">渐变角度：</div>
         <Slider
           :min="0"
           :max="360"
           :step="15"
-          :value="background.gradientRotate || 0"
-          @update:value="value => updateBackground({ gradientRotate: value as number })" 
+          :value="background.gradient.rotate || 0"
+          @update:value="value => updateGradientBackground({ rotate: value as number })"
           style="width: 60%;"
         />
       </div>
@@ -113,23 +109,30 @@
           { label: '宽屏 16 : 10', value: 0.625 },
           { label: '标准 4 : 3', value: 0.75 },
           { label: '纸张 A3 / A4', value: 0.70710678 },
+          { label: '竖向 A3 / A4', value: 1.41421356 },
         ]"
       />
     </div>
 
     <Divider />
 
-    <div class="title">全局主题</div>
+    <div class="title">
+      <span>全局主题</span>
+      <span class="more" @click="moreThemeConfigsVisible = !moreThemeConfigsVisible">
+        <span class="text">更多</span>
+        <IconDown v-if="moreThemeConfigsVisible" />
+        <IconRight v-else />
+      </span>
+    </div>
     <div class="row">
       <div style="width: 40%;">字体：</div>
       <Select
         style="width: 60%;"
         :value="theme.fontName"
+        search
+        searchLabel="搜索字体"
         @update:value="value => updateTheme({ fontName: value as string })"
-        :options="[
-          ...availableFonts,
-          ...WEB_FONTS
-        ]"
+        :options="FONTS"
       />
     </div>
     <div class="row">
@@ -168,9 +171,94 @@
         <ColorButton :color="theme.themeColor" />
       </Popover>
     </div>
+    
+    <template v-if="moreThemeConfigsVisible">
+      <div class="row">
+        <div style="width: 40%;">边框样式：</div>
+        <SelectCustom style="width: 60%;">
+          <template #options>
+            <div class="option" v-for="item in lineStyleOptions" :key="item" @click="updateTheme({ outline: { ...theme.outline, style: item } })">
+              <SVGLine :type="item" />
+            </div>
+          </template>
+          <template #label>
+            <SVGLine :type="theme.outline.style" />
+          </template>
+        </SelectCustom>
+      </div>
+      <div class="row">
+        <div style="width: 40%;">边框颜色：</div>
+        <Popover trigger="click" style="width: 60%;">
+          <template #content>
+            <ColorPicker
+              :modelValue="theme.outline.color"
+              @update:modelValue="value => updateTheme({ outline: { ...theme.outline, color: value } })"
+            />
+          </template>
+          <ColorButton :color="theme.outline.color || '#000'" />
+        </Popover>
+      </div>
+      <div class="row">
+        <div style="width: 40%;">边框粗细：</div>
+        <NumberInput 
+          :value="theme.outline.width || 0" 
+          @update:value="value => updateTheme({ outline: { ...theme.outline, width: value } })" 
+          style="width: 60%;" 
+        />
+      </div>
+      <div class="row" style="height: 30px;">
+        <div style="width: 40%;">水平阴影：</div>
+        <Slider 
+          style="width: 60%;"
+          :min="-10" 
+          :max="10" 
+          :step="1" 
+          :value="theme.shadow.h" 
+          @update:value="value => updateTheme({ shadow: { ...theme.shadow, h: value as number } })"
+        />
+      </div>
+      <div class="row" style="height: 30px;">
+        <div style="width: 40%;">垂直阴影：</div>
+        <Slider
+          style="width: 60%;"
+          :min="-10"
+          :max="10"
+          :step="1"
+          :value="theme.shadow.v"
+          @update:value="value => updateTheme({ shadow: { ...theme.shadow, v: value as number } })"
+        />
+      </div>
+      <div class="row" style="height: 30px;">
+        <div style="width: 40%;">模糊距离：</div>
+        <Slider
+          style="width: 60%;"
+          :min="1"
+          :max="20"
+          :step="1"
+          :value="theme.shadow.blur"
+          @update:value="value => updateTheme({ shadow: { ...theme.shadow, blur: value as number } })"
+        />
+      </div>
+      <div class="row">
+        <div style="width: 40%;">阴影颜色：</div>
+        <Popover trigger="click" style="width: 60%;">
+          <template #content>
+            <ColorPicker
+              :modelValue="theme.shadow.color"
+              @update:modelValue="value => updateTheme({ shadow: { ...theme.shadow, color: value } })"
+            />
+          </template>
+          <ColorButton :color="theme.shadow.color" />
+        </Popover>
+      </div>
+    </template>
 
     <div class="row">
-      <Button style="flex: 1;" @click="applyThemeToAllSlides()">应用主题到全部</Button>
+      <Button style="flex: 1;" @click="applyThemeToAllSlides(moreThemeConfigsVisible)">应用主题到全部</Button>
+    </div>
+
+    <div class="row">
+      <Button style="flex: 1;" @click="themeStylesExtractVisible = true">从幻灯片提取主题</Button>
     </div>
 
     <Divider />
@@ -193,27 +281,46 @@
           </div>
 
           <div class="btns">
-            <div class="btn" @click="applyPresetThemeToSingleSlide(item)">应用</div>
-            <div class="btn" @click="applyPresetThemeToAllSlides(item)">应用全局</div>
+            <Button type="primary" size="small" @click="applyPresetThemeToSingleSlide(item)">应用</Button>
+            <Button type="primary" size="small" style="margin-top: 3px;" @click="applyPresetThemeToAllSlides(item)">应用全局</Button>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <Modal
+    v-model:visible="themeStylesExtractVisible" 
+    :width="320"
+    @closed="themeStylesExtractVisible = false"
+  >
+    <ThemeStylesExtract @close="themeStylesExtractVisible = false" />
+  </Modal>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMainStore, useSlidesStore } from '@/store'
-import type { SlideBackground, SlideTheme } from '@/types/slides'
+import { useSlidesStore } from '@/store'
+import type { 
+  Gradient,
+  GradientType,
+  SlideBackground,
+  SlideBackgroundType,
+  SlideTheme,
+  SlideBackgroundImage,
+  SlideBackgroundImageSize,
+  LineStyleType,
+} from '@/types/slides'
 import { PRESET_THEMES } from '@/configs/theme'
-import { WEB_FONTS } from '@/configs/font'
+import { FONTS } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSlideTheme from '@/hooks/useSlideTheme'
 import { getImageDataURL } from '@/utils/image'
 
-import ColorButton from './common/ColorButton.vue'
+import ThemeStylesExtract from './ThemeStylesExtract.vue'
+import SVGLine from './common/SVGLine.vue'
+import ColorButton from '@/components/ColorButton.vue'
 import FileInput from '@/components/FileInput.vue'
 import ColorPicker from '@/components/ColorPicker/index.vue'
 import Divider from '@/components/Divider.vue'
@@ -221,10 +328,18 @@ import Slider from '@/components/Slider.vue'
 import Button from '@/components/Button.vue'
 import Select from '@/components/Select.vue'
 import Popover from '@/components/Popover.vue'
+import SelectCustom from '@/components/SelectCustom.vue'
+import NumberInput from '@/components/NumberInput.vue'
+import Modal from '@/components/Modal.vue'
+import GradientBar from '@/components/GradientBar.vue'
 
 const slidesStore = useSlidesStore()
-const { availableFonts } = storeToRefs(useMainStore())
-const { slides, currentSlide, viewportRatio, theme } = storeToRefs(slidesStore)
+const { slides, currentSlide, slideIndex, viewportRatio, theme } = storeToRefs(slidesStore)
+
+const moreThemeConfigsVisible = ref(false)
+const themeStylesExtractVisible = ref(false)
+const currentGradientIndex = ref(0)
+const lineStyleOptions = ref<LineStyleType[]>(['solid', 'dashed', 'dotted'])
 
 const background = computed(() => {
   if (!currentSlide.value.background) {
@@ -243,8 +358,12 @@ const {
   applyThemeToAllSlides,
 } = useSlideTheme()
 
+watch(slideIndex, () => {
+  currentGradientIndex.value = 0
+})
+
 // 设置背景模式：纯色、图片、渐变色
-const updateBackgroundType = (type: 'solid' | 'image' | 'gradient') => {
+const updateBackgroundType = (type: SlideBackgroundType) => {
   if (type === 'solid') {
     const newBackground: SlideBackground = {
       ...background.value,
@@ -257,8 +376,10 @@ const updateBackgroundType = (type: 'solid' | 'image' | 'gradient') => {
     const newBackground: SlideBackground = {
       ...background.value,
       type: 'image',
-      image: background.value.image || '',
-      imageSize: background.value.imageSize || 'cover',
+      image: background.value.image || {
+        src: '',
+        size: 'cover',
+      },
     }
     slidesStore.updateSlide({ background: newBackground })
   }
@@ -266,26 +387,49 @@ const updateBackgroundType = (type: 'solid' | 'image' | 'gradient') => {
     const newBackground: SlideBackground = {
       ...background.value,
       type: 'gradient',
-      gradientType: background.value.gradientType || 'linear',
-      gradientColor: background.value.gradientColor || ['#fff', '#fff'],
-      gradientRotate: background.value.gradientRotate || 0,
+      gradient: background.value.gradient || {
+        type: 'linear',
+        colors: [
+          { pos: 0, color: '#fff' },
+          { pos: 100, color: '#fff' },
+        ],
+        rotate: 0,
+      },
     }
+    currentGradientIndex.value = 0
     slidesStore.updateSlide({ background: newBackground })
   }
   addHistorySnapshot()
 }
 
-// 设置背景图片
+// 设置背景
 const updateBackground = (props: Partial<SlideBackground>) => {
   slidesStore.updateSlide({ background: { ...background.value, ...props } })
   addHistorySnapshot()
+}
+
+// 设置渐变背景
+const updateGradientBackground = (props: Partial<Gradient>) => {
+  updateBackground({ gradient: { ...background.value.gradient!, ...props } })
+}
+const updateGradientBackgroundColors = (color: string) => {
+  const colors = background.value.gradient!.colors.map((item, index) => {
+    if (index === currentGradientIndex.value) return { ...item, color }
+    return item
+  })
+  updateGradientBackground({ colors })
+}
+
+// 设置图片背景
+const updateImageBackground = (props: Partial<SlideBackgroundImage>) => {
+  updateBackground({ image: { ...background.value.image!, ...props } })
 }
 
 // 上传背景图片
 const uploadBackgroundImage = (files: FileList) => {
   const imageFile = files[0]
   if (!imageFile) return
-  getImageDataURL(imageFile).then(dataURL => updateBackground({ image: dataURL }))
+  getImageDataURL(imageFile).then(dataURL => updateImageBackground({ src: dataURL }))
 }
 
 // 应用当前页背景到全部页面
@@ -322,7 +466,18 @@ const updateViewportRatio = (value: number) => {
   margin-bottom: 10px;
 }
 .title {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 10px;
+
+  .more {
+    cursor: pointer;
+
+    .text {
+      font-size: 12px;
+      margin-right: 3px;
+    }
+  }
 }
 .background-image-wrapper {
   margin-bottom: 10px;
@@ -372,6 +527,7 @@ const updateViewportRatio = (value: number) => {
     justify-content: center;
     padding: 8px;
     border: 1px solid $borderColor;
+    border-radius: $borderRadius;
   }
 
   .text {
@@ -388,7 +544,7 @@ const updateViewportRatio = (value: number) => {
   }
 
   &:hover .btns {
-    display: flex;
+    opacity: 1;
   }
 
   .btns {
@@ -397,25 +553,25 @@ const updateViewportRatio = (value: number) => {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    display: none;
+    display: flex;
     background-color: rgba($color: #000, $alpha: .25);
+    opacity: 0;
+    transition: opacity $transitionDelay;
   }
-  .btn {
-    width: 72px;
-    padding: 5px 0;
-    text-align: center;
-    background-color: $themeColor;
-    color: #fff;
-    font-size: 12px;
-    border-radius: $borderRadius;
+}
+.option {
+  height: 32px;
+  padding: 0 5px;
+  border-radius: $borderRadius;
 
-    &:hover {
-      background-color: $themeHoverColor;
-    }
+  &:not(.selected):hover {
+    background-color: rgba($color: $themeColor, $alpha: .05);
+    cursor: pointer;
+  }
 
-    & + .btn {
-      margin-top: 5px;
-    }
+  &.selected {
+    color: $themeColor;
+    font-weight: 700;
   }
 }
 </style>
