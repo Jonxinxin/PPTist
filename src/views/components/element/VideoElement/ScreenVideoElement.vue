@@ -1,5 +1,5 @@
 <template>
-  <div class="screen-element-video"
+  <div class="base-element-video screen-element-video"
     :style="{
       top: elementInfo.top + 'px',
       left: elementInfo.left + 'px',
@@ -18,6 +18,7 @@
           :height="elementInfo.height"
           :src="elementInfo.src" 
           :poster="elementInfo.poster"  
+          :autoplay="elementInfo.autoplay"
           :scale="scale" 
         />
       </div>

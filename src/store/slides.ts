@@ -1,12 +1,8 @@
 import { defineStore } from 'pinia'
-import tinycolor from 'tinycolor2'
 import { omit } from 'lodash'
-import type { Slide, SlideTheme, PPTElement, PPTAnimation } from '@/types/slides'
-import { slides } from '@/mocks/slides'
-import { theme } from '@/mocks/theme'
-import { layouts } from '@/mocks/layout'
+import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate } from '@/types/slides'
 
-interface RemoveElementPropData {
+interface RemovePropData {
   id: string
   propName: string | string[]
 }
@@ -27,16 +23,39 @@ export interface SlidesState {
   theme: SlideTheme
   slides: Slide[]
   slideIndex: number
+  viewportSize: number
   viewportRatio: number
+  templates: SlideTemplate[]
 }
 
 export const useSlidesStore = defineStore('slides', {
   state: (): SlidesState => ({
     title: '未命名演示文稿', // 幻灯片标题
-    theme: theme, // 主题样式
-    slides: slides, // 幻灯片页面数据
+    theme: {
+      themeColor: '#5b9bd5',
+      fontColor: '#333',
+      fontName: '',
+      backgroundColor: '#fff',
+      shadow: {
+        h: 3,
+        v: 3,
+        blur: 2,
+        color: '#808080',
+      },
+      outline: {
+        width: 2,
+        color: '#525252',
+        style: 'solid',
+      },
+    }, // 主题样式
+    slides: [], // 幻灯片页面数据
     slideIndex: 0, // 当前页面索引
+    viewportSize: 1000, // 可视区域宽度基数
     viewportRatio: 0.5625, // 可视区域比例，默认16:9
+    templates: [
+      { name: '红色通用模板', id: 'template_1', cover: 'https://asset.pptist.cn/img/template_1.jpg' },
+      { name: '蓝色通用模板', id: 'template_2', cover: 'https://asset.pptist.cn/img/template_2.jpg' },
+    ], // 模板
   }),
 
   getters: {
@@ -84,26 +103,6 @@ export const useSlidesStore = defineStore('slides', {
       }
       return formatedAnimations
     },
-  
-    layouts(state) {
-      const {
-        themeColor,
-        fontColor,
-        fontName,
-        backgroundColor,
-      } = state.theme
-  
-      const subColor = tinycolor(fontColor).isDark() ? 'rgba(230, 230, 230, 0.5)' : 'rgba(180, 180, 180, 0.5)'
-  
-      const layoutsString = JSON.stringify(layouts)
-        .replaceAll('{{themeColor}}', themeColor)
-        .replaceAll('{{fontColor}}', fontColor)
-        .replaceAll('{{fontName}}', fontName)
-        .replaceAll('{{backgroundColor}}', backgroundColor)
-        .replaceAll('{{subColor}}', subColor)
-      
-      return JSON.parse(layoutsString)
-    },
   },
 
   actions: {
@@ -116,6 +115,10 @@ export const useSlidesStore = defineStore('slides', {
       this.theme = { ...this.theme, ...themeProps }
     },
   
+    setViewportSize(size: number) {
+      this.viewportSize = size
+    },
+  
     setViewportRatio(viewportRatio: number) {
       this.viewportRatio = viewportRatio
     },
@@ -124,33 +127,62 @@ export const useSlidesStore = defineStore('slides', {
       this.slides = slides
     },
   
+    setTemplates(templates: SlideTemplate[]) {
+      this.templates = templates
+    },
+  
     addSlide(slide: Slide | Slide[]) {
       const slides = Array.isArray(slide) ? slide : [slide]
+      for (const slide of slides) {
+        if (slide.sectionTag) delete slide.sectionTag
+      }
+
       const addIndex = this.slideIndex + 1
       this.slides.splice(addIndex, 0, ...slides)
       this.slideIndex = addIndex
     },
   
-    updateSlide(props: Partial<Slide>) {
-      const slideIndex = this.slideIndex
+    updateSlide(props: Partial<Slide>, slideId?: string) {
+      const slideIndex = slideId ? this.slides.findIndex(item => item.id === slideId) : this.slideIndex
       this.slides[slideIndex] = { ...this.slides[slideIndex], ...props }
+    },
+  
+    removeSlideProps(data: RemovePropData) {
+      const { id, propName } = data
+
+      const slides = this.slides.map(slide => {
+        return slide.id === id ? omit(slide, propName) : slide
+      }) as Slide[]
+      this.slides = slides
     },
   
     deleteSlide(slideId: string | string[]) {
       const slidesId = Array.isArray(slideId) ? slideId : [slideId]
+      const slides: Slide[] = JSON.parse(JSON.stringify(this.slides))
   
       const deleteSlidesIndex = []
-      for (let i = 0; i < slidesId.length; i++) {
-        const index = this.slides.findIndex(item => item.id === slidesId[i])
+      for (const deletedId of slidesId) {
+        const index = slides.findIndex(item => item.id === deletedId)
         deleteSlidesIndex.push(index)
+
+        const deletedSlideSection = slides[index].sectionTag
+        if (deletedSlideSection) {
+          const handleSlideNext = slides[index + 1]
+          if (handleSlideNext && !handleSlideNext.sectionTag) {
+            delete slides[index].sectionTag
+            slides[index + 1].sectionTag = deletedSlideSection
+          }
+        }
+
+        slides.splice(index, 1)
       }
       let newIndex = Math.min(...deleteSlidesIndex)
   
-      const maxIndex = this.slides.length - slidesId.length - 1
+      const maxIndex = slides.length - 1
       if (newIndex > maxIndex) newIndex = maxIndex
   
       this.slideIndex = newIndex
-      this.slides = this.slides.filter(item => !slidesId.includes(item.id))
+      this.slides = slides
     },
   
     updateSlideIndex(index: number) {
@@ -183,7 +215,7 @@ export const useSlidesStore = defineStore('slides', {
       this.slides[slideIndex].elements = (elements as PPTElement[])
     },
   
-    removeElementProps(data: RemoveElementPropData) {
+    removeElementProps(data: RemovePropData) {
       const { id, propName } = data
       const propsNames = typeof propName === 'string' ? [propName] : propName
   

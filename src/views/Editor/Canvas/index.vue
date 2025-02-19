@@ -85,7 +85,7 @@
 
     <div class="drag-mask" v-if="spaceKeyState"></div>
 
-    <Ruler :viewportStyles="viewportStyles" v-if="showRuler" />
+    <Ruler :viewportStyles="viewportStyles" :elementList="elementList" v-if="showRuler" />
 
     <Modal
       v-model:visible="linkDialogVisible" 
@@ -102,7 +102,7 @@ import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
-import type { PPTElement } from '@/types/slides'
+import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { injectKeySlideScale } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
@@ -113,7 +113,7 @@ import useMouseSelection from './hooks/useMouseSelection'
 import useDropImageOrText from './hooks/useDropImageOrText'
 import useRotateElement from './hooks/useRotateElement'
 import useScaleElement from './hooks/useScaleElement'
-import useSelectElement from './hooks/useSelectElement'
+import useSelectAndMoveElement from './hooks/useSelectElement'
 import useDragElement from './hooks/useDragElement'
 import useDragLineElement from './hooks/useDragLineElement'
 import useMoveShapeKeypoint from './hooks/useMoveShapeKeypoint'
@@ -121,7 +121,7 @@ import useInsertFromCreateSelection from './hooks/useInsertFromCreateSelection'
 
 import useDeleteElement from '@/hooks/useDeleteElement'
 import useCopyAndPasteElement from '@/hooks/useCopyAndPasteElement'
-import useSelectAllElement from '@/hooks/useSelectAllElement'
+import useSelectElement from '@/hooks/useSelectElement'
 import useScaleCanvas from '@/hooks/useScaleCanvas'
 import useScreening from '@/hooks/useScreening'
 import useSlideHandler from '@/hooks/useSlideHandler'
@@ -181,12 +181,12 @@ const { mouseSelection, mouseSelectionVisible, mouseSelectionQuadrant, updateMou
 
 const { dragElement } = useDragElement(elementList, alignmentLines, canvasScale)
 const { dragLineElement } = useDragLineElement(elementList)
-const { selectElement } = useSelectElement(elementList, dragElement)
+const { selectElement } = useSelectAndMoveElement(elementList, dragElement)
 const { scaleElement, scaleMultiElement } = useScaleElement(elementList, alignmentLines, canvasScale)
 const { rotateElement } = useRotateElement(elementList, viewportRef, canvasScale)
 const { moveShapeKeypoint } = useMoveShapeKeypoint(elementList, canvasScale)
 
-const { selectAllElement } = useSelectAllElement()
+const { selectAllElements } = useSelectElement()
 const { deleteAllElements } = useDeleteElement()
 const { pasteElement } = useCopyAndPasteElement()
 const { enterScreeningFromStart } = useScreening()
@@ -277,7 +277,12 @@ const insertCustomShape = (data: CreateCustomShapeData) => {
     viewBox,
   } = data
   const position = formatCreateSelection({ start, end })
-  position && createShapeElement(position, { path, viewBox })
+  if (position) {
+    const supplement: Partial<PPTShapeElement> = {}
+    if (data.fill) supplement.fill = data.fill
+    if (data.outline) supplement.outline = data.outline
+    createShapeElement(position, { path, viewBox }, supplement)
+  }
 
   mainStore.setCreatingCustomShapeState(false)
 }
@@ -292,7 +297,7 @@ const contextmenus = (): ContextmenuItem[] => {
     {
       text: '全选',
       subText: 'Ctrl + A',
-      handler: selectAllElement,
+      handler: selectAllElements,
     },
     {
       text: '标尺',
@@ -355,7 +360,7 @@ provide(injectKeySlideScale, canvasScale)
 }
 .viewport-wrapper {
   position: absolute;
-  box-shadow: 0 0 15px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.01), 0 0 12px 0 rgba(0, 0, 0, 0.1);
 }
 .viewport {
   position: absolute;

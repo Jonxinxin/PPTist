@@ -5,18 +5,28 @@
       'disabled': disabled,
       'resizable': resizable,
     }"
+    ref="textareaRef"
     :disabled="disabled"
     :value="value" 
     :rows="rows"
     :placeholder="placeholder"
+    :style="{
+      padding: padding ? `${padding}px` : '10px',
+    }"
     @input="$event => handleInput($event)"
+    @focus="$event => emit('focus', $event)"
+    @blur="$event => emit('blur', $event)"
+    @keydown.enter="$event => emit('enter', $event)"
   ></textarea>
 </template>
 
 <script lang="ts" setup>
+import { ref } from 'vue'
+
 withDefaults(defineProps<{
   value: string
   rows?: number
+  padding?: number
   disabled?: boolean
   resizable?: boolean
   placeholder?: string
@@ -29,11 +39,23 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:value', payload: string): void
+  (event: 'focus', payload: FocusEvent): void
+  (event: 'blur', payload: FocusEvent): void
+  (event: 'enter', payload: KeyboardEvent): void
 }>()
 
 const handleInput = (e: Event) => {
   emit('update:value', (e.target as HTMLInputElement).value)
 }
+
+const textareaRef = ref<HTMLTextAreaElement>()
+const focus = () => {
+  if (textareaRef.value) textareaRef.value.focus()
+}
+
+defineExpose({
+  focus,
+})
 </script>
 
 <style lang="scss" scoped>

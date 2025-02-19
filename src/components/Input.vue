@@ -4,6 +4,7 @@
     :class="{
       'disabled': disabled,
       'focused': focused,
+      'simple': simple,
     }"
   >
     <span class="prefix">
@@ -15,6 +16,7 @@
       :disabled="disabled"
       :value="value" 
       :placeholder="placeholder"
+      :maxlength="maxlength"
       @input="$event => handleInput($event)"
       @focus="$event => handleFocus($event)"
       @blur="$event => handleBlur($event)"
@@ -34,9 +36,12 @@ withDefaults(defineProps<{
   value: string
   disabled?: boolean
   placeholder?: string
+  simple?: boolean
+  maxlength?: number
 }>(), {
   disabled: false,
   placeholder: '',
+  simple: false,
 })
 
 const emit = defineEmits<{
@@ -92,6 +97,7 @@ defineExpose({
     color: $textColor;
     padding: 0 5px;
     flex: 1;
+    font-size: 13px;
     font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji';
 
     &::placeholder {
@@ -107,6 +113,14 @@ defineExpose({
     background-color: #f5f5f5;
     border-color: #dcdcdc;
     color: #b7b7b7;
+
+    input {
+      color: #b7b7b7;
+    }
+  }
+
+  &.simple {
+    border: 0;
   }
 
   .prefix, .suffix {

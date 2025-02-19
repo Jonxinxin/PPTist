@@ -8,7 +8,7 @@
 </template>
 
 <script lang="ts" setup>
-import { type CSSProperties, onMounted, ref, watch, computed } from 'vue'
+import { type CSSProperties, onMounted, onUnmounted, ref, watch, computed } from 'vue'
 import tippy, { type Instance, type Placement } from 'tippy.js'
 
 import 'tippy.js/animations/scale.css'
@@ -20,11 +20,13 @@ const props = withDefaults(defineProps<{
   appendTo?: HTMLElement | 'parent'
   contentStyle?: CSSProperties
   center?: boolean
+  offset?: number
 }>(), {
   value: false,
   trigger: 'click',
   placement: 'bottom',
   center: false,
+  offset: 8,
 })
 
 const emit = defineEmits<{
@@ -46,6 +48,10 @@ watch(() => props.value, () => {
   else instance.value.hide()
 })
 
+onUnmounted(() => {
+  if (instance.value) instance.value.destroy()
+})
+
 onMounted(() => {
   instance.value = tippy(triggerRef.value!, {
     content: contentRef.value!,
@@ -55,7 +61,7 @@ onMounted(() => {
     interactive: true,
     appendTo: props.appendTo || document.body,
     maxWidth: 'none',
-    offset: [0, 8],
+    offset: [0, props.offset],
     duration: 200,
     animation: 'scale',
     theme: 'popover',
@@ -84,7 +90,7 @@ onMounted(() => {
   padding: 10px;
   border: 1px solid $borderColor;
   box-shadow: $boxShadow;
-  border-radius: 2px;
+  border-radius: $borderRadius;
   font-size: 13px;
 }
 </style>
